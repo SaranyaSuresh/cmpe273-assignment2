@@ -57,9 +57,7 @@ public class ProcurementSchedulerJob extends Job
     {
     	try
     	{    	
-    	//String strResponse = ProcurementService.jerseyClient.resource(
-		//"http://ip.jsontest.com/").get(String.class);
-    	//log.debug("Response from jsontest.com: {}", strResponse);
+    	
     	String user = env("APOLLO_USER", "admin");
 		String password = env("APOLLO_PASSWORD", "password");
 		String host = env("APOLLO_HOST", "54.215.133.131");
@@ -100,21 +98,24 @@ public class ProcurementSchedulerJob extends Job
 				System.out.println("Unexpected message type: "+msg.getClass());
 			}   
 		}
-
 		//POST to Publisher
-		Client c = Client.create();
-		String message = "{\"id\":\"59198\",\"order_book_isbns\":" + isbn + "}";
-		WebResource webResource_1 = c.resource("http://54.215.133.131:9000/orders");
-		ClientResponse response_1 = webResource_1.type("application/json").post(ClientResponse.class, message);
-		if (response_1.getStatus()!=200) 
+		if(isbn.size() > 0)
 		{
-			throw new RuntimeException("Failed: HTTP error : " +response_1.getStatus());	
+			Client c = Client.create();
+			String message = "{\"id\":\"59198\",\"order_book_isbns\":" + isbn + "}";
+			WebResource webResource_1 = c.resource("http://54.215.133.131:9000/orders");
+			ClientResponse response_1 = webResource_1.type("application/json").post(ClientResponse.class, message);
+			if (response_1.getStatus()!=200) 
+			{
+				throw new RuntimeException("Failed: HTTP error : " +response_1.getStatus());	
+			}
+			System.out.println(response_1.toString());
+			System.out.println(response_1.getEntity(String.class));
 		}
-		System.out.println(response_1.toString());
-		System.out.println(response_1.getEntity(String.class));
 	
 			
 		//GET from Publisher
+		Client c = Client.create();
 		WebResource webResource_2 = c.resource("http://54.215.133.131:9000/orders/59198");
 		ClientResponse response_2 = webResource_2.accept("application/json").get(ClientResponse.class);
 		if (response_2.getStatus() != 200) {
@@ -137,22 +138,19 @@ public class ProcurementSchedulerJob extends Job
 			String title = books_shipped.getJSONObject(i).getString("title");
 			String category = books_shipped.getJSONObject(i).getString("category");
 			String cover_image = books_shipped.getJSONObject(i).getString("coverimage");
-			parse_books = parse_books + isbn_num + ":\"" + title + "\":\"" + category + "\":\"" + cover_image + "\"";
+			parse_books = isbn_num + ":\"" + title + "\":\"" + category + "\":\"" + cover_image + "\"";
 			String dest_topic = topicQ + category;
 			      
 			Session session_2 = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-			//Destination all_topic_dest = new StompJmsDestination(ProcurementService.topic);
 			Destination topic_dest = new StompJmsDestination(dest_topic);
 			           
-			//MessageProducer producer_1 = session_2.createProducer(all_topic_dest);
 			MessageProducer producer_2 = session_2.createProducer(topic_dest);
-			//producer_1.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
-			//producer_2.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
+			producer_2.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
 
 			TextMessage msg = session_2.createTextMessage(parse_books);
 			msg.setLongProperty("id", System.currentTimeMillis());
 
-			//producer_1.send(msg);
+			
 			producer_2.send(msg);
 			System.out.println("Topic created." + msg);
 			

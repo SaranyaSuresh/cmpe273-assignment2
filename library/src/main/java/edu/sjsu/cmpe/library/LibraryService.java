@@ -125,18 +125,26 @@ public class LibraryService extends Service<LibraryServiceConfiguration> {
 	    		String body = ((TextMessage) msg).getText();
 	    		System.out.println("Received message = " + body);
 	    		String[] contents = body.split(":",4);
-	    		Book book = new Book();
-	    						
-				book.setIsbn(Long.parseLong(contents[0]));
-	    		book.setTitle(contents[1]);
-	    		book.setCategory(contents[2]);
-	    		String trimmed_url = contents[3].replaceAll("^\"|\"$", "");
+	    		Long isbn = Long.parseLong(contents[0]);
+				String title = contents[1].substring(1, contents[1].length()-1);
+				String category = contents[2].substring(1, contents[2].length()-1);
+				String coverimage = contents[3].substring(1, contents[3].length()-1);
+				  
+				Book book = new Book();
+				System.out.println("isbn is: "+ isbn);
+				book.setIsbn(isbn);
+				System.out.println("Title is: "+title);
+	    		book.setTitle(title);
+	    		System.out.println("Category is: " + category);
+	    		book.setCategory(category);
+	    		String trimmed_url = coverimage.replaceAll("^\"|\"$", "");
 	    		URL url = new URL(trimmed_url);
+	    		System.out.println("Coverimage is: "+ url);
 				book.setCoverimage(url);
 								
 	    		bookRepository.saveBook(book);
 	    		System.out.println("Book creation successful.");
-	    		
+	    			    		
 	    		if(bookRepository.getBookByISBN(book.getIsbn()).getStatus().toString() == "lost")
                 {
                         bookRepository.getBookByISBN(book.getIsbn()).setStatus(Status.available);
@@ -144,7 +152,7 @@ public class LibraryService extends Service<LibraryServiceConfiguration> {
                         
                 }
 	    		
-                
+ 
 	    	}
     	    else if (msg instanceof StompJmsMessage) 
     	    {

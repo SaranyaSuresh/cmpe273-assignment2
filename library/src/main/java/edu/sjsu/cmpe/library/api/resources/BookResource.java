@@ -14,8 +14,18 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import javax.jms.Connection;
+import javax.jms.Destination;
+import javax.jms.JMSException;
+import javax.jms.MessageProducer;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+
 import com.yammer.dropwizard.jersey.params.LongParam;
 import com.yammer.metrics.annotation.Timed;
+
+import org.fusesource.stomp.jms.StompJmsConnectionFactory;
+import org.fusesource.stomp.jms.StompJmsDestination;
 
 import edu.sjsu.cmpe.library.domain.Book;
 import edu.sjsu.cmpe.library.domain.Book.Status;
@@ -30,6 +40,13 @@ import edu.sjsu.cmpe.library.repository.BookRepositoryInterface;
 public class BookResource {
     /** bookRepository instance */
     private final BookRepositoryInterface bookRepository;
+    private String libraryName;
+    private String topicName;
+    private String queueName;
+    private String apolloUser;
+    private String apolloPassword;
+    private String apolloHost;
+    private String apolloPort;
 
     /**
      * BookResource constructor
@@ -37,8 +54,15 @@ public class BookResource {
      * @param bookRepository
      *            a BookRepository instance
      */
-    public BookResource(BookRepositoryInterface bookRepository) {
+    public BookResource(BookRepositoryInterface bookRepository, String libraryName, String topicName, String queueName, String apolloUser, String apolloPassword, String apolloHost, String apolloPort) {
 	this.bookRepository = bookRepository;
+	this.libraryName = libraryName;
+	this.topicName = topicName;
+	this.queueName = queueName;
+	this.apolloUser = apolloUser;
+	this.apolloPassword = apolloPassword;
+	this.apolloHost = apolloHost;
+	this.apolloPort = apolloPort;
     }
 
     @GET
@@ -85,10 +109,29 @@ public class BookResource {
     @Path("/{isbn}")
     @Timed(name = "update-book-status")
     public Response updateBookStatus(@PathParam("isbn") LongParam isbn,
-	    @DefaultValue("available") @QueryParam("status") Status status) {
+	    @DefaultValue("available") @QueryParam("status") Status status) throws JMSException {
 	Book book = bookRepository.getBookByISBN(isbn.get());
-	book.setStatus(status);
+	if ((status.getValue() == "lost") && (book.getStatus() == Status.available)){
+		book.setStatus(status);
+		StompJmsConnectionFactory factory = new StompJmsConnectionFactory();
+		factory.setBrokerURI("tcp://" + apolloHost + ":" + apolloPort);
 
+		Connection connection = factory.createConnection(apolloUser, apolloPassword);
+		connection.start();
+		Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+		Destination dest = new StompJmsDestination(queueName);
+		MessageProducer producer = session.createProducer(dest);
+		//producer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
+
+		System.out.println("Sending messages to " + queueName + "...");
+		String data = libraryName + ":" + isbn;
+		TextMessage msg = session.createTextMessage(data);
+		msg.setLongProperty("id", System.currentTimeMillis());
+		producer.send(msg);
+
+		connection.close();
+		
+	}
 	BookDto bookResponse = new BookDto(book);
 	String location = "/books/" + book.getIsbn();
 	bookResponse.addLink(new LinkDto("view-book", location, "GET"));
